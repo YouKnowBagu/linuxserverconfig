@@ -56,13 +56,21 @@ To confirm the user is a sudo-user, enter
 
 If you have successfully made a sudo-user you will see a list of directories, otherwise you will get a permission denied error.
 
-# Disable remote root access
+\#Edit sshd_config
+We will now disable the root user from being able to remotely login, and change the SSH port from 22 to 2200.
 
 Open the sshd_config file in nano (or vim, if you prefer).
 
     sudo nano /etc/ssh/sshd_config
 
-Change the line
+Change
+    \#What ports, IPs and protocols we listen for
+    Port 22
+to
+    \#What ports, IPs and protocols we listen for
+    Port 2200
+
+then change the line
 
     #PermitRootLogin yes
 
@@ -70,8 +78,7 @@ to
 
     PermitRootLogin no
 
-1.  At this point as a precaution it can be useful to ssh into the server in another shell, as root, to ensure you are don't lock yourself out of the server. As long as you successfully completed step three, you shouldn't need to worry, but it's better to be safe than sorry. Restart sshd in the terminal.
-
+Restart sshd
 
     sudo /etc/init.d/sshd restart
 
@@ -79,16 +86,138 @@ Grader will now be our admin user, and if we need to switch to root for any reas
 
     sudo su root
 
-# Change firewall settings
+\#Upgrade packages
+To get a list of available packages and their versions, enter
+    sudo apt-get update
+To install newer versions of the packages, enter
+    sudo apt-get upgrade
 
-## SSH configuration
+\#Configure firewall
+Continue adding security by configuring the uncomplicated firewall.  You can check the status of the firewall at any time with the command
+    sudo ufw status
+Begin by blocking all incoming requests.  From there we can selectively add what is needed.
+    sudo ufw default deny incoming
+We will enable our server to send out requests with
+    sudo ufw default allow outoing
+Now we will allow the incoming connections for port 2200 (SSH), port 80 (HTTP), and port 123 (NTP) and enable the firewall.
 
-## Update applications
+    sudo ufw allow 2200/tcp
+    sudo ufw allow 80/tcp
+    sudo ufw allow 123/udp
+    sudo ufw enable
 
-## SSH on non-default
+\#Set local timezone
+The local timezone should already be set for UTC, but let's be sure!  Enter
+    sudo dpkg-reconfigure tzdata
+Highlight "None of the above", press enter, then highlight "UTC" and press enter.  The local timezone is now configured to UTC
 
-## Configure postgresql
+\#Setup Apache
+Time to add packages!  We will start with our HTTPServer Package, Apache2.
+    sudo apt-get install apache2
 
-## Ensure remote login works
+Now we add the apache modules to allow the server to host Python based web applications
+    sudo apt-get install python-setuptools libapache2-mod-wsgi
+python-setuptools allows us to download, build, install, update, and remove Python packages.  libapache2-mod-wsgi is the WSGI adapter for Apache.  Restart apache to enable our new modules
+    sudo service apache2 restart
+Apache should now be ready to host our application!
 
-## Configure to serve item catalog
+\#Setup PostgreSQL
+In this step we will install and configure our database system PostgreSQL
+    sudo apt-get install postgresql
+
+<!-- Check if no remote connections are allowed sudo vim /etc/postgresql/9.3/main/pg_hba.conf -->
+Switch to the newly created postgres user
+    sudo su postgres
+And enter into the PostgreSQL
+    psql
+The command prompt should now look like this:
+    postgres=#
+We will create a new empty database named catalog
+    postgres=# CREATE DATABASE catalog
+And we will create a new user named catalog
+    postgres=# CREATE USER catalog;
+Let's give that catalog user a password!
+    postgres=# ALTER ROLE catalog with PASSWORD 'password';
+And give catalog user all priveleges on the catalog database
+    postgres=# GRANT ALL PRIVILEGES ON DATABASE catalog TO catalog;
+All finished here, quit postgreSQL
+    postgres=# \q
+And head pack to the grader user
+    exit
+Database should now be up and running!
+#Item catalog setup
+We're going to be using git to clone our item catalog app onto our server.  Refer to the file system hierarchy at the beginning of this document for an explanation of the directories used in the next section.
+
+First we install git on the server
+    sudo apt-get install git
+Move to our target directory
+    cd /var/www
+Clone our application repository into the directory
+    git clone <https://github.com/YOURUSERNAME/YOURREPOSITORYNAME.git>
+replacing YOURUSERNAME and YOURREPOSITORY name with, you guessed it, your github username and your repository's name.
+
+We are going to need to edit several files now to configure the app to work with PostgreSQL and our server.
+
+\#Configure WSGI
+Refer to the [Apache Documentation] for more information on this step.  We are going to tell Apache how to handle requests, where to find site files, etc.  To start, open the configuration file
+    sudo nano /etc/apache2/sites-enabled/000-default.conf
+p
+
+exit
+Install git, clone and setup your Catalog App project.
+
+Install Git using sudo apt-get install git
+Use cd /var/www to move to the /var/www directory
+Create the application directory sudo mkdir FlaskApp
+Move inside this directory using cd FlaskApp
+Clone the Catalog App to the virtual machine git clone <https://github.com/kongling893/Item_Catalog_UDACITY.git>
+Rename the project's name sudo mv ./Item_Catalog_UDACITY ./FlaskApp
+Move to the inner FlaskApp directory using cd FlaskApp
+Rename website.py to **init**.py using sudo mv website.py **init**.py
+Edit database_setup.py, website.py and functions_helper.py and change engine = create_engine('sqlite:///toyshop.db') to engine = create_engine('postgresql://catalog:password@localhost/catalog')
+Install pip sudo apt-get install python-pip
+Use pip to install dependencies sudo pip install -r requirements.txt
+Install psycopg2 sudo apt-get -qqy install postgresql python-psycopg2
+Create database schema sudo python database_setup.py
+Configure and Enable a New Virtual Host
+
+Create FlaskApp.conf to edit: sudo nano /etc/apache2/sites-available/FlaskApp.conf
+Add the following lines of code to the file to configure the virtual host.
+
+&lt;VirtualHost \*:80>
+    ServerName 52.24.125.52
+    ServerAdmin qiaowei8993@gmail.com
+    WSGIScriptAlias / /var/www/FlaskApp/flaskapp.wsgi
+    &lt;Directory /var/www/FlaskApp/FlaskApp/>
+        Order allow,deny
+        Allow from all
+    </Directory>
+    Alias /static /var/www/FlaskApp/FlaskApp/static
+    &lt;Directory /var/www/FlaskApp/FlaskApp/static/>
+        Order allow,deny
+        Allow from all
+    </Directory>
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    LogLevel warn
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>
+Enable the virtual host with the following command: sudo a2ensite FlaskApp
+Create the .wsgi File
+
+Create the .wsgi File under /var/www/FlaskApp:
+
+cd /var/www/FlaskApp
+sudo nano flaskapp.wsgi
+Add the following lines of code to the flaskapp.wsgi file:
+
+\#!/usr/bin/python
+import sys
+import logging
+logging.basicConfig(stream=sys.stderr)
+sys.path.insert(0,"/var/www/FlaskApp/")
+
+from FlaskApp import app as application
+application.secret_key = 'Add your secret key'
+Restart Apache
+
+Restart Apache sudo service apache2 restart
