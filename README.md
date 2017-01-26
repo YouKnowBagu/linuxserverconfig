@@ -56,7 +56,8 @@ To confirm the user is a sudo-user, enter
 
 If you have successfully made a sudo-user you will see a list of directories, otherwise you will get a permission denied error.
 
-\#Edit sshd_config
+# Edit sshd_config
+
 We will now disable the root user from being able to remotely login, and change the SSH port from 22 to 2200.
 
 Open the sshd_config file in nano (or vim, if you prefer).
@@ -64,10 +65,13 @@ Open the sshd_config file in nano (or vim, if you prefer).
     sudo nano /etc/ssh/sshd_config
 
 Change
-    \#What ports, IPs and protocols we listen for
+
+    # What ports, IPs and protocols we listen for
     Port 22
+
 to
-    \#What ports, IPs and protocols we listen for
+
+    # What ports, IPs and protocols we listen for
     Port 2200
 
 then change the line
@@ -86,19 +90,30 @@ Grader will now be our admin user, and if we need to switch to root for any reas
 
     sudo su root
 
-\#Upgrade packages
+# Upgrade packages
+
 To get a list of available packages and their versions, enter
+
     sudo apt-get update
+
 To install newer versions of the packages, enter
+
     sudo apt-get upgrade
 
-\#Configure firewall
+# Configure firewall
+
 Continue adding security by configuring the uncomplicated firewall.  You can check the status of the firewall at any time with the command
+
     sudo ufw status
+
 Begin by blocking all incoming requests.  From there we can selectively add what is needed.
+
     sudo ufw default deny incoming
+
 We will enable our server to send out requests with
+
     sudo ufw default allow outoing
+
 Now we will allow the incoming connections for port 2200 (SSH), port 80 (HTTP), and port 123 (NTP) and enable the firewall.
 
     sudo ufw allow 2200/tcp
@@ -106,118 +121,200 @@ Now we will allow the incoming connections for port 2200 (SSH), port 80 (HTTP), 
     sudo ufw allow 123/udp
     sudo ufw enable
 
-\#Set local timezone
+# Set local timezone
+
 The local timezone should already be set for UTC, but let's be sure!  Enter
+
     sudo dpkg-reconfigure tzdata
+
 Highlight "None of the above", press enter, then highlight "UTC" and press enter.  The local timezone is now configured to UTC
 
-\#Setup Apache
+# Setup Apache
+
 Time to add packages!  We will start with our HTTPServer Package, Apache2.
+
     sudo apt-get install apache2
 
 Now we add the apache modules to allow the server to host Python based web applications
+
     sudo apt-get install python-setuptools libapache2-mod-wsgi
+
 python-setuptools allows us to download, build, install, update, and remove Python packages.  libapache2-mod-wsgi is the WSGI adapter for Apache.  Restart apache to enable our new modules
+
     sudo service apache2 restart
+
 Apache should now be ready to host our application!
 
-\#Setup PostgreSQL
+# Setup PostgreSQL
+
 In this step we will install and configure our database system PostgreSQL
+
     sudo apt-get install postgresql
 
-<!-- Check if no remote connections are allowed sudo vim /etc/postgresql/9.3/main/pg_hba.conf -->
+Install Psycopg2, the database adapter
+
+    sudo apt-get install python -psycopg2
+
 Switch to the newly created postgres user
+
     sudo su postgres
+
 And enter into the PostgreSQL
+
     psql
+
 The command prompt should now look like this:
+
     postgres=#
+
 We will create a new empty database named catalog
+
     postgres=# CREATE DATABASE catalog
+
 And we will create a new user named catalog
+
     postgres=# CREATE USER catalog;
+
 Let's give that catalog user a password!
+
     postgres=# ALTER ROLE catalog with PASSWORD 'password';
+
 And give catalog user all priveleges on the catalog database
+
     postgres=# GRANT ALL PRIVILEGES ON DATABASE catalog TO catalog;
+
 All finished here, quit postgreSQL
+
     postgres=# \q
-And head pack to the grader user
+
+And head back to the grader user
+
     exit
+
 Database should now be up and running!
-#Item catalog setup
+
+# Item catalog setup
 We're going to be using git to clone our item catalog app onto our server.  Refer to the file system hierarchy at the beginning of this document for an explanation of the directories used in the next section.
 
 First we install git on the server
+
     sudo apt-get install git
+
 Move to our target directory
+
     cd /var/www
+
 Clone our application repository into the directory
+
     git clone <https://github.com/YOURUSERNAME/YOURREPOSITORYNAME.git>
+
 replacing YOURUSERNAME and YOURREPOSITORY name with, you guessed it, your github username and your repository's name.
 
 We are going to need to edit several files now to configure the app to work with PostgreSQL and our server.
 
-\#Configure WSGI
-Refer to the [Apache Documentation] for more information on this step.  We are going to tell Apache how to handle requests, where to find site files, etc.  To start, open the configuration file
+## Update create_engine
+
+We will start with our database.  You will want to change the file database_setup.py.  Change the line
+
+    engine = create_engine('sqlite:///catalog.db')
+
+to
+
+    engine = create_engine('postgresql://catalog:password@localhost/catalog')
+
+## Update OAuth2
+
+The client_secrets.json files will need to be updated for each OAuth provider you used; in my case, Google and Facebook.
+
+### Google
+
+Head to the API Manager for your item-catalog project in your Google developer console.  Go to credentials on the left navigation bar, and then select your catalog OAuth2 Client ID.  Under Authorized JavaScript Origins, add your Amazon Elastic cloud URI.  Use your websites public IP address in place of mine.  Be sure to note the DASHES instead of PERIODS between numbers.
+<http://ec2-35-164-254-61.us-west-2.compute.amazonaws.com>
+
+Under authorized redirect URIs, for each localhost redirect URI, add a new entry, replacing <http://localhost:8080> with <http://ec2-35-164-254-61.us-west-2.compute.amazonaws.com>  For example, if you had the following URI <http://localhost:8080/login> you would add the following entry <http://ec2-35-164-254-61.us-west-2.compute.amazonaws.com/login>
+
+Save the changes, and download the new JSON file.  Copy the contents and paste them into the JSON file on your server.
+
+### Facebook
+
+Navigate to your application on the Facebook developers site.  Go to the Facebook Login section under Products, go to Settings, and add <http://ec2-35-164-254-61.us-west-2.compute.amazonaws.com/> to the OAuth redirect URIs.  For Facebook, you do not need to update the JSON files.
+
+# Configure Virtual Host
+
+Refer to the [Apache Documentation](https://httpd.apache.org/docs/2.4/) for more information on this step.  We are going to tell Apache how to handle requests, where to find site files, etc.  To start, create and open the configuration file for your app
+
     sudo nano /etc/apache2/sites-enabled/000-default.conf
-p
 
-exit
-Install git, clone and setup your Catalog App project.
+The file should look like this
 
-Install Git using sudo apt-get install git
-Use cd /var/www to move to the /var/www directory
-Create the application directory sudo mkdir FlaskApp
-Move inside this directory using cd FlaskApp
-Clone the Catalog App to the virtual machine git clone <https://github.com/kongling893/Item_Catalog_UDACITY.git>
-Rename the project's name sudo mv ./Item_Catalog_UDACITY ./FlaskApp
-Move to the inner FlaskApp directory using cd FlaskApp
-Rename website.py to **init**.py using sudo mv website.py **init**.py
-Edit database_setup.py, website.py and functions_helper.py and change engine = create_engine('sqlite:///toyshop.db') to engine = create_engine('postgresql://catalog:password@localhost/catalog')
-Install pip sudo apt-get install python-pip
-Use pip to install dependencies sudo pip install -r requirements.txt
-Install psycopg2 sudo apt-get -qqy install postgresql python-psycopg2
-Create database schema sudo python database_setup.py
-Configure and Enable a New Virtual Host
+    <VirtualHost \*:80>
 
-Create FlaskApp.conf to edit: sudo nano /etc/apache2/sites-available/FlaskApp.conf
-Add the following lines of code to the file to configure the virtual host.
+        # The ServerName directive sets the request scheme, hostname and port that
+        # the server uses to identify itself. This is used when creating
+        # redirection URLs. In the context of virtual hosts, the ServerName
+        # specifies what hostname must appear in the request's Host: header to
+        # match this virtual host. For the default virtual host (this file) this
+        # value is not decisive as it is used as a last resort host regardless.
+        # However, you must set it for any further virtual host explicitly.
+        #ServerName www.example.com
 
-&lt;VirtualHost \*:80>
-    ServerName 52.24.125.52
-    ServerAdmin qiaowei8993@gmail.com
-    WSGIScriptAlias / /var/www/FlaskApp/flaskapp.wsgi
-    &lt;Directory /var/www/FlaskApp/FlaskApp/>
-        Order allow,deny
-        Allow from all
-    </Directory>
-    Alias /static /var/www/FlaskApp/FlaskApp/static
-    &lt;Directory /var/www/FlaskApp/FlaskApp/static/>
-        Order allow,deny
-        Allow from all
-    </Directory>
-    ErrorLog ${APACHE_LOG_DIR}/error.log
-    LogLevel warn
-    CustomLog ${APACHE_LOG_DIR}/access.log combined
-</VirtualHost>
-Enable the virtual host with the following command: sudo a2ensite FlaskApp
-Create the .wsgi File
+        ServerAdmin YOUREMAIL
+        DocumentRoot /var/www/html
+        WSGIScriptAlias / /var/www/item-catalog/app.wsgi
 
-Create the .wsgi File under /var/www/FlaskApp:
+        # Available loglevels: trace8, ..., trace1, debug, info, notice, warn,
+        # error, crit, alert, emerg.
+        # It is also possible to configure the loglevel for particular
+        # modules, e.g.
+        #LogLevel info ssl:warn
 
-cd /var/www/FlaskApp
-sudo nano flaskapp.wsgi
-Add the following lines of code to the flaskapp.wsgi file:
+        ErrorLog ${APACHE_LOG_DIR}/error.log
+        CustomLog ${APACHE_LOG_DIR}/access.log combined
 
-\#!/usr/bin/python
-import sys
-import logging
-logging.basicConfig(stream=sys.stderr)
-sys.path.insert(0,"/var/www/FlaskApp/")
+        # For most configuration files from conf-available/, which are
+        # enabled or disabled at a global level, it is possible to
+        # include a line for only one particular virtual host. For example the
+        # following line enables the CGI configuration for this host only
+        # after it has been globally disabled with "a2disconf".
+        #Include conf-available/serve-cgi-bin.conf
+    </VirtualHost>
 
-from FlaskApp import app as application
-application.secret_key = 'Add your secret key'
-Restart Apache
+# Create and configure wsgi files
 
-Restart Apache sudo service apache2 restart
+The finish line is in site (get it?)!  We now need to make the wsgi file inside of our applications directory.
+
+    sudo nano /var/www/YOURAPPDIRECTORYNAME/app.wsgi
+
+and in this file, paste the following
+
+    \#!/usr/bin/python
+    import sys
+    import logging
+    logging.basicConfig(stream=sys.stderr)
+    sys.path.insert(0,"/var/www/item-catalog/")
+    from app import app as application
+    application.secret_key = 'super_secret_key'
+
+# Install required Python packages
+
+Start by installing the Python package Manager
+
+    sudo apt-get install python-pip
+
+Using the python package manager, install the pipreqs package
+
+    sudo pip install pipreqs
+
+using pipreqs, create a requirements.txt file
+
+    sudo pipreqs /var/www/item-catalog/app
+
+and finally, using pip, install all requirements from the requirements.txt file
+
+    sudo pip install -r requirements.txt
+
+# Restart and enjoy!
+
+    sudo service apache2 Restart
+
+Your site should now be available through your public IP address.  Congrats!
