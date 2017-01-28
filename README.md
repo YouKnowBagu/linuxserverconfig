@@ -311,7 +311,7 @@ using pipreqs, create a requirements.txt file
 
 and finally, using pip, install all requirements from the requirements.txt file
 
-    sudo pip install -r requirements.txt
+    sudo pip install requirements.txt
 
 # Restart and enjoy!
 
