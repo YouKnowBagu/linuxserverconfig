@@ -153,7 +153,7 @@ In this step we will install and configure our database system PostgreSQL
 
 Install Psycopg2, the database adapter
 
-    sudo apt-get install python -psycopg2
+    sudo apt-get install python-psycopg2
 
 Switch to the newly created postgres user
 
@@ -169,7 +169,7 @@ The command prompt should now look like this:
 
 We will create a new empty database named catalog
 
-    postgres=# CREATE DATABASE catalog
+    postgres=# CREATE DATABASE catalog;
 
 And we will create a new user named catalog
 
@@ -315,6 +315,6 @@ and finally, using pip, install all requirements from the requirements.txt file
 
 # Restart and enjoy!
 
-    sudo service apache2 Restart
+    sudo service apache2 restart
 
 Your site should now be available through your public IP address.  Congrats!
